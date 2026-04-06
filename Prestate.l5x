@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Routine Name="PrestateRoutine" Type="RLL">
+
+  <RLLContent>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[NOP();]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(S:FS)[OTL(AbortingFS) ,[OTU(MyPhase_HMI.StartReq) OTU(MyPhase_HMI.StopReq) OTU(MyPhase_HMI.HoldReq) ,OTU(MyPhase_HMI.RestartReq) OTU(MyPhase_HMI.AbortReq) OTU(MyPhase_HMI.ResetReq) ,OTU(MyPhase_PLC.StartReq) OTU(MyPhase_PLC.StopReq) OTU(MyPhase_PLC.HoldReq) ,OTU(MyPhase_PLC.RestartReq) OTU(MyPhase_PLC.AbortReq) OTU(MyPhase_PLC.ResetReq) ] ,POVR(DS3_AI1_OP1010Purge,Abort,0) ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIO(S:FS)XIC(MyPhase.Aborted)OTU(AbortingFS);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(S:FS)SIZE(StepRunning[0],0,MaximumRestartingStepIndex);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[JSR(Alarms,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[JSR(CommonLogic,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[JSR(Interlocks,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[JSR(Parameters,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(StartsAutomatically)XIC(MyPhase.Idle)EQU(MyPhase_Ext.ProcessInterlocks,0)EQU(MyPhase_Ext.SecureInterlocks,0)OTL(MyPhase_PLC.StartReq);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(RestartsAutomatically)XIC(MyPhase.Held)EQU(MyPhase_Ext.SecureInterlocks,0)OTL(MyPhase_PLC.RestartReq);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIC(ResetsAutomaticallyWhenCompleteOrStopped) [XIC(MyPhase.Complete) ,XIC(MyPhase.Stopped) ] ,XIC(ResetsAutomaticallyWhenAborted) XIC(MyPhase.Aborted) ]OTL(MyPhase_PLC.ResetReq);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(MyPhase.Idle)XIO(RunningRequiresSFR)EQU(MyPhase_Ext.ProcessInterlocks,0)EQU(MyPhase_Ext.SecureInterlocks,0)[XIC(MyPhase_Ext.EnOper) XIC(MyPhase_HMI.StartReq) ,XIC(MyPhase_PLC.StartReq) ]PCMD(DS3_AI1_OP1010Purge,Start,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(HasStoppedState)[XIC(MyPhase.Running) ,XIC(MyPhase.Holding) ,XIC(MyPhase.Restarting) ,XIC(MyPhase.Held) ]XIO(StoppingRequiresSFR)[XIC(MyPhase_Ext.EnOper) OTE(MyPhase_Ext.CanBeStopped) XIC(MyPhase_HMI.StopReq) ,XIC(MyPhase_PLC.StopReq) ]PCMD(DS3_AI1_OP1010Purge,Stop,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(HasHeldState)[XIC(MyPhase.Running) ,XIC(MyPhase.Restarting) ]XIO(HoldingRequiresSFR)[XIC(MyPhase_Ext.EnOper) OTE(MyPhase_Ext.CanBeHeld) XIC(MyPhase_HMI.HoldReq) ,XIC(MyPhase_PLC.HoldReq) ]PCMD(DS3_AI1_OP1010Purge,Hold,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIO(MyPhase.Idle)NEQ(MyPhase_Ext.SecureInterlocks,0)XIO(MyPhase.Idle)XIO(MyPhase.Complete)XIO(MyPhase.Stopped)XIO(MyPhase.Aborted)XIO(MyPhase.Resetting)XIO(MyPhase.Held)[XIC(HasHeldState) POVR(DS3_AI1_OP1010Purge,Hold,0) ,XIO(HasHeldState) POVR(DS3_AI1_OP1010Purge,Abort,0) ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(MyPhase.Held)XIO(RestartingRequiresSFR)XIO(RunningRequiresSFR)EQU(MyPhase_Ext.SecureInterlocks,0)[XIC(MyPhase_Ext.EnOper) OTE(MyPhase_Ext.CanBeRestarted) XIC(MyPhase_HMI.RestartReq) ,XIC(MyPhase_PLC.RestartReq) ]PCMD(DS3_AI1_OP1010Purge,Restart,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIO(AbortingRequiresSFR)[XIC(MyPhase_Ext.EnOper) [XIC(MyPhase.Holding) ,XIC(MyPhase.Held) ,XIC(MyPhase.Restarting) ,XIC(MyPhase.Stopping) ] OTE(MyPhase_Ext.CanBeAborted) XIC(MyPhase_HMI.AbortReq) ,XIC(MyPhase_PLC.AbortReq) ]PCMD(DS3_AI1_OP1010Purge,Abort,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIC(MyPhase.Complete) ,XIC(MyPhase.Stopped) ,XIC(MyPhase.Aborted) ]XIO(ResettingRequiresSFR)[XIC(MyPhase_Ext.EnOper) OTE(MyPhase_Ext.CanBeReset) XIC(MyPhase_HMI.ResetReq) ,XIC(MyPhase_PLC.ResetReq) ]PCMD(DS3_AI1_OP1010Purge,Reset,0);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIC(MyPhase_Ext.EnOper) XIC(MyPhase_HMI.AutoReq) [OTL(MyPhase_Ext.AutoMan) ,OTU(MyPhase_HMI.AutoReq) ] ,XIC(MyPhase_Ext.EnOper) XIC(MyPhase_HMI.ManReq) [OTU(MyPhase_Ext.AutoMan) ,OTU(MyPhase_HMI.ManReq) ] ,XIC(MyPhase_PLC.AutoReq) [OTL(MyPhase_Ext.AutoMan) ,OTU(MyPhase_PLC.AutoReq) ] ,XIC(MyPhase_PLC.ManReq) [OTU(MyPhase_Ext.AutoMan) ,OTU(MyPhase_PLC.ManReq) ] ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIO(MyPhase_Ext.AutoMan) [SFP(Aborting,Pause) ,SFP(Holding,Pause) ,SFP(Restarting,Pause) ,SFP(Running,Pause) ] ,[XIC(MyPhase_Ext.EnOper) XIC(MyPhase_HMI.StepInReq) ,XIC(MyPhase_PLC.StepInReq) ,XIC(MyPhase_Ext.AutoMan) ] [SFP(Aborting,Execute) ,SFP(Holding,Execute) ,SFP(Restarting,Execute) ,SFP(Running,Execute) ,OTU(MyPhase_HMI.StepInReq) ,OTU(MyPhase_PLC.StepInReq) ] ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[OTU(MyPhase_HMI.StartReq) OTU(MyPhase_HMI.StopReq) OTU(MyPhase_HMI.HoldReq) ,OTU(MyPhase_HMI.RestartReq) OTU(MyPhase_HMI.AbortReq) OTU(MyPhase_HMI.ResetReq) ,OTU(MyPhase_PLC.StartReq) OTU(MyPhase_PLC.StopReq) OTU(MyPhase_PLC.HoldReq) ,OTU(MyPhase_PLC.RestartReq) OTU(MyPhase_PLC.AbortReq) OTU(MyPhase_PLC.ResetReq) ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIO(MyPhase.Aborting) XIC(AbortingRequiresSFR) [SFR(Aborting,StepIniAborting) ,XIC(StepIniAborting.Reset) OTU(AbortingRequiresSFR) ] ,XIC(MyPhase.Aborting) OTL(AbortingRequiresSFR) ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIO(MyPhase.Holding) XIC(HoldingRequiresSFR) [SFR(Holding,StepIniHolding) ,XIC(StepIniHolding.Reset) OTU(HoldingRequiresSFR) ] ,XIC(MyPhase.Holding) OTL(HoldingRequiresSFR) ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIO(MyPhase.Restarting) XIC(RestartingRequiresSFR) [SFR(Restarting,StepIniRestarting) ,XIC(StepIniRestarting.Reset) OTU(RestartingRequiresSFR) ] ,XIC(MyPhase.Restarting) OTL(RestartingRequiresSFR) ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIO(MyPhase.Running) XIO(MyPhase.Holding) XIO(MyPhase.Held) XIO(MyPhase.Restarting) XIC(RunningRequiresSFR) [SFR(Running,StepIniRunning) ,XIC(StepIniRunning.Reset) OTU(RunningRequiresSFR) ] ,[XIC(MyPhase.Running) ,XIC(MyPhase.Stopped) ,XIC(MyPhase.Stopping) ,XIC(MyPhase.Aborted) ,XIC(MyPhase.Aborting) ] OTL(RunningRequiresSFR) ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIO(MyPhase.Running)[XIC(MyPhase.Holding) ,XIC(MyPhase.Held) ,XIC(MyPhase.Restarting) ]XIC(RunningRequiresSFR)[GEQ(MyRestartingStepIndex,0) LES(MyRestartingStepIndex,MaximumRestartingStepIndex) [SFR(Running,StepRunning[MyRestartingStepIndex]) ,MEQ(StepRunning[MyRestartingStepIndex].Status,4194304,4194304) OTU(RunningRequiresSFR) ] ,[LES(MyRestartingStepIndex,0) ,GEQ(MyRestartingStepIndex,MaximumRestartingStepIndex) ] [SFR(Running,StepIniRunning) ,XIC(StepIniRunning.Reset) OTU(RunningRequiresSFR) ] ];]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(MyPhase.Idle)EQU(MyPhase_Ext.SecureInterlocks,0)EQU(MyPhase_Ext.ProcessInterlocks,0)OTE(MyPhase_Ext.Ready);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[[XIC(MyPhase.Idle) [NEQ(MyPhase_Ext.SecureInterlocks,0) ,NEQ(MyPhase_Ext.ProcessInterlocks,0) ] ,[XIC(MyPhase.Holding) ,XIC(MyPhase.Held) ] NEQ(MyPhase_Ext.SecureInterlocks,0) ]OTE(MyPhase_Ext.Interlocked);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(MyPhase.Idle)MOV(0,MyStepIndex);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(MyPhase.Complete)MOV(4999,MyStepIndex);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(MyPhase.Stopped)MOV(5999,MyStepIndex);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(MyPhase.Held)MOV(6999,MyStepIndex);]]></Text>
+
+    </Rung>
+
+    <Rung Type="N">
+
+      <Text><![CDATA[XIC(MyPhase.Aborted)MOV(9999,MyStepIndex);]]></Text>
+
+    </Rung>
+
+  </RLLContent>
+
+</Routine>
