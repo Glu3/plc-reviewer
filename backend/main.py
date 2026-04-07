@@ -1,5 +1,6 @@
 # backend/main.py
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, get_db
 from engine.parser import parse_routine_from_bytes, rungs_to_dict
@@ -12,6 +13,13 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="PLC Reviewer")
 
+# Allow the React frontend to call this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():

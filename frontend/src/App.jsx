@@ -1,121 +1,111 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import UploadReference from './components/UploadReference'
+import ReviewUpload from './components/ReviewUpload'
+import FindingsReport from './components/FindingsReport'
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [activeTab, setActiveTab]   = useState('review')
+  const [findings,  setFindings]    = useState(null)
+  const [reviewMeta, setReviewMeta] = useState(null)
+
+  function handleReviewComplete(data) {
+    setFindings(data.findings)
+    setReviewMeta({
+      filename:        data.filename,
+      reviewId:        data.review_id,
+      totalDeviations: data.total_deviations,
+      programsChecked: data.programs_checked,
+    })
+    setActiveTab('results')
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div style={styles.app}>
 
-      <div className="ticks"></div>
+      {/* Header */}
+      <header style={styles.header}>
+        <h1 style={styles.title}>PLC Reviewer</h1>
+        <p style={styles.subtitle}>PreState routine compliance checker</p>
+      </header>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      {/* Tabs */}
+      <nav style={styles.nav}>
+        {['review', 'reference', 'results'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              ...styles.tab,
+              ...(activeTab === tab ? styles.tabActive : {}),
+            }}
+          >
+            {tab === 'review'    ? 'Review Project'    : null}
+            {tab === 'reference' ? 'Upload Reference'  : null}
+            {tab === 'results'   ? `Results ${reviewMeta ? `(${reviewMeta.totalDeviations})` : ''}` : null}
+          </button>
+        ))}
+      </nav>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {/* Content */}
+      <main style={styles.main}>
+        {activeTab === 'reference' && (
+          <UploadReference />
+        )}
+        {activeTab === 'review' && (
+          <ReviewUpload onComplete={handleReviewComplete} />
+        )}
+        {activeTab === 'results' && (
+          <FindingsReport findings={findings} meta={reviewMeta} />
+        )}
+      </main>
+
+    </div>
   )
 }
 
-export default App
+const styles = {
+  app: {
+    fontFamily:  'system-ui, sans-serif',
+    maxWidth:    900,
+    margin:      '0 auto',
+    padding:     '0 24px 48px',
+    color:       '#1a1a1a',
+  },
+  header: {
+    padding:     '32px 0 16px',
+    borderBottom: '1px solid #e5e5e5',
+    marginBottom: 0,
+  },
+  title: {
+    fontSize:   24,
+    fontWeight: 600,
+    margin:     0,
+  },
+  subtitle: {
+    fontSize:   14,
+    color:      '#666',
+    margin:     '4px 0 0',
+  },
+  nav: {
+    display:    'flex',
+    gap:        4,
+    padding:    '12px 0',
+    borderBottom: '1px solid #e5e5e5',
+    marginBottom: 24,
+  },
+  tab: {
+    padding:      '8px 16px',
+    border:       '1px solid transparent',
+    borderRadius: 6,
+    background:   'transparent',
+    cursor:       'pointer',
+    fontSize:     14,
+    color:        '#444',
+  },
+  tabActive: {
+    background:   '#f0f0f0',
+    border:       '1px solid #ddd',
+    color:        '#000',
+    fontWeight:   500,
+  },
+}
