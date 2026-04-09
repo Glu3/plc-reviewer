@@ -8,7 +8,8 @@
     },
     "ghcr.io/devcontainers/features/node:1": {
         "version": "20"
-    }
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
 
   "forwardPorts": [8000, 5173, 5050, 5432, 6379],
@@ -31,8 +32,8 @@
     }
   },
 
-  "postCreateCommand": "cd /workspaces/plc-reviewer/frontend && npm install && cd /workspaces/plc-reviewer/backend && pip install uv && uv venv && source .venv/bin/activate && uv pip install -r requirements.txt",
-  "postStartCommand": "cd /workspaces/plc-reviewer/backend && uv venv --clear && uv pip install -r requirements.txt && gh codespace ports visibility 5173:public -c $CODESPACE_NAME 2>/dev/null || true"
+  "postCreateCommand": "cd /workspaces/plc-reviewer/frontend && npm install && cd /workspaces/plc-reviewer/backend && pip install uv && uv venv && uv pip install -r requirements.txt",
+  "postStartCommand": "cd /workspaces/plc-reviewer/backend && uv venv --clear && uv pip install -r requirements.txt && gh codespace ports visibility 5173:public -c $CODESPACE_NAME 2>/dev/null || true",
   "customizations": {
     "vscode": {
       "extensions": [
