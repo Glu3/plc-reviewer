@@ -32,7 +32,7 @@
   },
 
   "postCreateCommand": "cd /workspaces/plc-reviewer/frontend && npm install && cd /workspaces/plc-reviewer/backend && pip install uv && uv venv && source .venv/bin/activate && uv pip install -r requirements.txt",
-
+  "postStartCommand": "cd /workspaces/plc-reviewer/backend && uv venv --clear && uv pip install -r requirements.txt && echo \"VITE_API_URL=https://${CODESPACE_NAME}-8000.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}\" > /workspaces/plc-reviewer/frontend/.env.local",
   "customizations": {
     "vscode": {
       "extensions": [
