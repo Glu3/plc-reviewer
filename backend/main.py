@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session
 from database import engine, get_db
 from engine.parser import parse_routine_from_bytes, rungs_to_dict
 from engine.diff import compare_routine
+from engine.zip_scanner import scan_zip
 from lxml import etree
+from typing import Optional
+from fastapi import Query
+from engine.project_comparator import compare_projects
 import models
 import uuid
 
@@ -201,6 +205,321 @@ async def review_file(
         ]
     }
 
+@app.post("/project/upload")
+async def upload_project(
+    file: UploadFile = File(...),
+    version_label: str = "v1",
+    db: Session = Depends(get_db)
+):
+    """
+    Upload a Rockwell project ZIP file.
+    Scans all programs, extracts PreState routines and tags,
+    stores everything in the database.
+    """
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a .zip file"
+        )
+
+    content = await file.read()
+
+    # Scan the ZIP
+    try:
+        scanned = scan_zip(content, version_label)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to scan ZIP: {str(e)}"
+        )
+
+    # Save project record
+    project = models.Project(
+        name          = scanned.name,
+        version_label = version_label,
+        zip_filename  = file.filename,
+        program_count = len(scanned.programs),
+    )
+    db.add(project)
+    db.flush()  # get the project.id before adding programs
+
+    # Save all programs
+    ph_count = op_count = up_count = other_count = 0
+    prestate_count = 0
+
+    for sp in scanned.programs:
+        program = models.Program(
+            project_id       = project.id,
+            program_name     = sp.program_name,
+            unit             = sp.unit,
+            program_type     = sp.program_type,
+            number           = sp.number,
+            description_name = sp.description_name,
+            has_prestate     = sp.has_prestate,
+            prestate_rungs   = sp.prestate_rungs,
+            tags             = sp.tags,
+        )
+        db.add(program)
+        db.flush()  # get program.id before adding routines
+
+        # Save all routines for this program
+        for sr in sp.routines:
+            routine = models.Routine(
+                program_id   = program.id,
+                routine_name = sr.routine_name,
+                routine_type = sr.routine_type,
+                rung_count   = len(sr.rungs),
+                rungs        = sr.rungs,
+            )
+            db.add(routine)
+
+        if sp.program_type == "PH": ph_count += 1
+        elif sp.program_type == "OP": op_count += 1
+        elif sp.program_type == "UP": up_count += 1
+        else: other_count += 1
+
+        if sp.has_prestate:
+            prestate_count += 1
+
+    db.commit()
+
+    return {
+        "project_id":    str(project.id),
+        "project_name":  scanned.name,
+        "version_label": version_label,
+        "zip_filename":  file.filename,
+        "summary": {
+            "total_programs":   len(scanned.programs),
+            "with_prestate":    prestate_count,
+            "phases_PH":        ph_count,
+            "operations_OP":    op_count,
+            "unit_procedures_UP": up_count,
+            "other":            other_count,
+        },
+        "programs": [
+            {
+                "name":         sp.program_name,
+                "unit":         sp.unit,
+                "type":         sp.program_type,
+                "has_prestate": sp.has_prestate,
+                "rung_count":   len(sp.prestate_rungs),
+                "tag_count":    len(sp.tags),
+                "routine_count": len(sp.routines),
+            }
+            for sp in scanned.programs
+        ]
+    }
+
+@app.post("/project/{project_id}/review")
+async def review_project(
+    project_id: str,
+    program_types: list[str] = None,
+    units: list[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Review all PreState routines in a project against the reference.
+    Optionally filter by program_types (PH, OP, UP) and units (AI1, VC1 etc).
+    """
+    from engine.diff import compare_routine
+
+    # Load reference
+    ref = db.query(models.ReferenceRoutine).filter_by(
+        reference_id="prestate_reference_v1"
+    ).first()
+
+    if not ref:
+        raise HTTPException(
+            status_code=400,
+            detail="No reference routine found. Upload a reference first."
+        )
+
+    # Load programs from this project
+    query = db.query(models.Program).filter(
+        models.Program.project_id == project_id,
+        models.Program.has_prestate == True
+    )
+
+    if program_types:
+        query = query.filter(models.Program.program_type.in_(program_types))
+
+    if units:
+        query = query.filter(models.Program.unit.in_(units))
+
+    programs = query.all()
+
+    if not programs:
+        raise HTTPException(
+            status_code=404,
+            detail="No programs found matching the filter criteria"
+        )
+
+    # Create review record
+    review = models.Review(
+        filename = f"project:{project_id}",
+        status   = "running",
+    )
+    db.add(review)
+    db.commit()
+
+    # Run diff against each program
+    all_findings = []
+
+    for program in programs:
+        from engine.parser import Rung
+        from engine.zip_scanner import normalise_rung_text
+
+        # Normalise the reference rungs — replace the reference program name
+        # with the same placeholder used when the ZIP was scanned
+        # so rung 2 POVR instruction does not generate false deviations
+        normalised_ref_rungs = [
+            {
+                "number": r["number"],
+                "text": normalise_rung_text(r["text"], "DS3_AI1_OP1010Purge")
+            }
+            for r in ref.rungs
+        ]
+
+        actual_rungs = [
+            Rung(number=r["number"], text=r["text"])
+            for r in (program.prestate_rungs or [])
+        ]
+
+        deviations = compare_routine(
+            program_name    = program.program_name,
+            reference_rungs = normalised_ref_rungs,
+            actual_rungs    = actual_rungs,
+        )
+
+        for dev in deviations:
+            finding = models.Finding(
+                review_id = review.id,
+                rule_id   = "ST-010",
+                severity  = "critical" if dev.deviation_type in (
+                    "missing_routine", "missing_rung"
+                ) else "warning",
+                program   = program.program_name,
+                location  = (
+                    f"Program:{program.program_name} / Routine:PreState"
+                    + (f" / Rung:{dev.rung_number}" if dev.rung_number else "")
+                ),
+                message   = _build_message(dev),
+                evidence  = "\n".join(dev.diff_lines) if dev.diff_lines else dev.actual_text or "",
+                fix       = _build_fix(dev),
+            )
+            db.add(finding)
+            all_findings.append(finding)
+
+    review.status = "complete"
+    db.commit()
+
+    # Group findings by program for the response
+    findings_by_program = {}
+    for f in all_findings:
+        if f.program not in findings_by_program:
+            findings_by_program[f.program] = []
+        findings_by_program[f.program].append({
+            "deviation_type": f.evidence,
+            "severity":       f.severity,
+            "location":       f.location,
+            "message":        f.message,
+            "fix":            f.fix,
+        })
+
+    return {
+        "review_id":        str(review.id),
+        "project_id":       project_id,
+        "programs_reviewed": len(programs),
+        "total_findings":   len(all_findings),
+        "findings_by_program": findings_by_program,
+    }
+
+@app.post("/project/compare")
+async def compare_two_projects(
+    project_a_id:   str,
+    project_ref_id: str,
+    routine_name:   str = "PrestateRoutine",
+    normalise:      bool = True,
+    program_types:  Optional[list[str]] = Query(default=None),
+    units:          Optional[list[str]] = Query(default=None),
+    db: Session = Depends(get_db)
+):
+    """
+    Compare a specific routine between two uploaded projects.
+    Programs matched by full name.
+    Flags added/removed programs and rung-level differences.
+    """
+    # Load programs from project A
+    query_a = db.query(models.Program).filter(
+        models.Program.project_id == project_a_id
+    )
+    if program_types:
+        query_a = query_a.filter(models.Program.program_type.in_(program_types))
+    if units:
+        query_a = query_a.filter(models.Program.unit.in_(units))
+    programs_a = query_a.all()
+
+    # Load programs from reference project
+    query_ref = db.query(models.Program).filter(
+        models.Program.project_id == project_ref_id
+    )
+    if program_types:
+        query_ref = query_ref.filter(models.Program.program_type.in_(program_types))
+    if units:
+        query_ref = query_ref.filter(models.Program.unit.in_(units))
+    programs_ref = query_ref.all()
+
+    if not programs_a and not programs_ref:
+        raise HTTPException(
+            status_code=404,
+            detail="No programs found for one or both projects."
+        )
+
+    # Run comparison
+    findings = compare_projects(
+        programs_a   = programs_a,
+        programs_ref = programs_ref,
+        routine_name = routine_name,
+        normalise    = normalise,
+        db           = db,
+    )
+
+    # Build summary
+    summary = {
+        "identical":              sum(1 for f in findings if f.finding_type == "identical"),
+        "programs_added":         sum(1 for f in findings if f.finding_type == "program_added"),
+        "programs_removed":       sum(1 for f in findings if f.finding_type == "program_removed"),
+        "routine_missing_in_a":   sum(1 for f in findings if f.finding_type == "routine_missing_in_a"),
+        "routine_missing_in_ref": sum(1 for f in findings if f.finding_type == "routine_missing_in_ref"),
+        "rungs_modified":         sum(1 for f in findings if f.finding_type == "rung_modified"),
+        "rungs_added":            sum(1 for f in findings if f.finding_type == "rung_added"),
+        "rungs_removed":          sum(1 for f in findings if f.finding_type == "rung_removed"),
+    }
+
+    return {
+        "project_a_id":   project_a_id,
+        "project_ref_id": project_ref_id,
+        "routine_name":   routine_name,
+        "normalise":      normalise,
+        "programs_in_a":  len(programs_a),
+        "programs_in_ref":len(programs_ref),
+        "total_findings": len([f for f in findings if f.finding_type != "identical"]),
+        "summary":        summary,
+        "findings": [
+            {
+                "finding_type": f.finding_type,
+                "program_name": f.program_name,
+                "routine_name": f.routine_name,
+                "severity":     f.severity,
+                "rung_number":  f.rung_number,
+                "message":      f.message,
+                "evidence":     f.evidence,
+                "fix":          f.fix,
+            }
+            for f in findings
+            if f.finding_type != "identical"  # exclude clean programs from response
+        ]
+    }
 
 def _build_message(dev) -> str:
     if dev.deviation_type == "missing_routine":
