@@ -29,11 +29,39 @@ app.add_middleware(
 def root():
     return {"status": "ok", "message": "PLC Reviewer API running"}
 
-
 @app.get("/health")
 def health():
     return {"status": "healthy"}
 
+@app.get("/projects")
+async def list_projects(db: Session = Depends(get_db)):
+    """Return all uploaded projects for selection."""
+    projects = db.query(models.Project).order_by(
+        models.Project.uploaded_at.desc()
+    ).all()
+    return [
+        {
+            "id":            str(p.id),
+            "name":          p.name,
+            "version_label": p.version_label,
+            "zip_filename":  p.zip_filename,
+            "program_count": p.program_count,
+            "uploaded_at":   p.uploaded_at.isoformat(),
+        }
+        for p in projects
+    ]
+
+@app.get("/project/{project_id}/routines")
+async def list_routines(project_id: str, db: Session = Depends(get_db)):
+    """Return all unique routine names found in a project."""
+    from sqlalchemy import distinct
+    routines = db.query(distinct(models.Routine.routine_name)).join(
+        models.Program,
+        models.Routine.program_id == models.Program.id
+    ).filter(
+        models.Program.project_id == project_id
+    ).all()
+    return sorted([r[0] for r in routines])
 
 @app.post("/reference")
 async def upload_reference(
