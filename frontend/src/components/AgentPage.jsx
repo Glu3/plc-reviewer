@@ -4,9 +4,9 @@ import { sendAgentMessage, uploadProject, listProjects } from '../api'
 export default function AgentPage() {
   const [messages,     setMessages]     = useState([
     {
-      role:    'assistant',
-      content: 'Hello! I can help you review PLC projects and compare routines between project versions. Upload a project ZIP on the right, then tell me what you want to analyse.'
-    }
+        role:    'assistant',
+        content: 'Hello! I can help you review PLC projects and compare routines between project versions. Upload a project ZIP on the right, then tell me what you want to analyse.',
+        toolCalls: [], }
   ])
   const [input,        setInput]        = useState('')
   const [loading,      setLoading]      = useState(false)
@@ -36,26 +36,32 @@ export default function AgentPage() {
 
   async function handleSend() {
     if (!input.trim() || loading) return
-    const userMessage = { role: 'user', content: input.trim() }
+    const userMessage = { role: 'user', content: input.trim(), toolCalls: [] }
     const newMessages = [...messages, userMessage]
     setMessages(newMessages)
     setInput('')
     setLoading(true)
 
     try {
-      const response = await sendAgentMessage(
+        const { response, toolCallsMade } = await sendAgentMessage(
         newMessages.filter(m => typeof m.content === 'string')
-      )
-      setMessages(prev => [...prev, { role: 'assistant', content: response }])
+                    .map(m => ({ role: m.role, content: m.content }))
+        )
+        setMessages(prev => [...prev, {
+        role:      'assistant',
+        content:   response,
+        toolCalls: toolCallsMade,
+        }])
     } catch (err) {
-      setMessages(prev => [...prev, {
-        role:    'assistant',
-        content: 'Sorry, I encountered an error. Please check that the backend is running and your API key is configured.',
-      }])
+        setMessages(prev => [...prev, {
+        role:      'assistant',
+        content:   'Sorry, I encountered an error. Please check that the backend is running.',
+        toolCalls: [],
+        }])
     } finally {
-      setLoading(false)
+        setLoading(false)
     }
-  }
+}
 
   async function handleUpload() {
     if (!uploadFile) return
@@ -68,27 +74,33 @@ export default function AgentPage() {
       if (fileInputRef.current) fileInputRef.current.value = ''
       await loadProjects()
 
-      // Notify the agent about the upload
       const notifyMsg = {
-        role:    'user',
-        content: `I just uploaded a project: ${data.project_name} (${data.version_label}), ` +
-                 `${data.summary.total_programs} programs total, ` +
-                 `${data.summary.with_prestate} with PreState routines. ` +
-                 `Project ID: ${data.project_id}`
+        role:      'user',
+        content:   `I just uploaded a project: ${data.project_name} (${data.version_label}), ` +
+                   `${data.summary.total_programs} programs total, ` +
+                   `${data.summary.with_prestate} with PreState routines. ` +
+                   `Project ID: ${data.project_id}`,
+        toolCalls: [],
       }
       const newMessages = [...messages, notifyMsg]
       setMessages(newMessages)
       setLoading(true)
 
-      const response = await sendAgentMessage(
+      const { response, toolCallsMade } = await sendAgentMessage(
         newMessages.filter(m => typeof m.content === 'string')
+                   .map(m => ({ role: m.role, content: m.content }))
       )
-      setMessages(prev => [...prev, { role: 'assistant', content: response }])
+      setMessages(prev => [...prev, {
+        role:      'assistant',
+        content:   response,
+        toolCalls: toolCallsMade,
+      }])
     } catch (err) {
       setUploadStatus('error')
       setMessages(prev => [...prev, {
-        role:    'assistant',
-        content: `I noticed an issue with the upload: ${err.response?.data?.detail || err.message}. Please try again.`,
+        role:      'assistant',
+        content:   `I noticed an issue with the upload: ${err.response?.data?.detail || err.message}. Please try again.`,
+        toolCalls: [],
       }])
     } finally {
       setLoading(false)

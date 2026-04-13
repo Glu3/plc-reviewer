@@ -586,13 +586,15 @@ async def agent_chat(
     request: ChatRequest,
     db: Session = Depends(get_db)
 ):
-    """Run the PLC review agent with tool calling."""
     messages = [
         {"role": m.role, "content": m.content}
         for m in request.messages
     ]
     try:
-        response = run_agent(messages, db)
-        return {"response": response}
+        response, tool_calls_made = run_agent(messages, db)
+        return {
+            "response":        response,
+            "tool_calls_made": tool_calls_made,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

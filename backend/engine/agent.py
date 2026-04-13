@@ -297,14 +297,13 @@ def execute_tool(tool_name: str, tool_input: dict, db: Session) -> str:
         return f"Tool error: {str(e)}"
 
 
-def run_agent(messages: list, db: Session) -> str:
+def run_agent(messages: list, db: Session) -> tuple[str, list]:
     """
-    Run the agent loop with tool calling using OpenAI-compatible API.
-    messages: full conversation history
-    Returns the final text response.
+    Returns (final_text_response, list_of_tool_calls_made)
     """
-    # Convert to OpenAI message format
-    openai_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    openai_messages  = [{"role": "system", "content": SYSTEM_PROMPT}]
+    tool_calls_made  = []
+
     for m in messages:
         openai_messages.append({"role": m["role"], "content": m["content"]})
 
@@ -317,22 +316,23 @@ def run_agent(messages: list, db: Session) -> str:
 
         choice = response.choices[0]
 
-        # If the model wants to use a tool
         if choice.finish_reason == "tool_calls":
-            # Add assistant message with tool calls
             openai_messages.append(choice.message)
 
-            # Execute each tool call
             for tool_call in choice.message.tool_calls:
                 tool_input = json.loads(tool_call.function.arguments)
                 result     = execute_tool(tool_call.function.name, tool_input, db)
+
+                # Record what was called
+                tool_calls_made.append({
+                    "tool":  tool_call.function.name,
+                    "input": tool_input,
+                })
 
                 openai_messages.append({
                     "role":         "tool",
                     "tool_call_id": tool_call.id,
                     "content":      result,
                 })
-
         else:
-            # Final text response
-            return choice.message.content or "I encountered an issue generating a response."
+            return choice.message.content or "No response.", tool_calls_made
