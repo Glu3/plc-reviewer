@@ -10,6 +10,8 @@ from lxml import etree
 from typing import Optional
 from fastapi import Query
 from engine.project_comparator import compare_projects
+from engine.agent import run_agent
+from pydantic import BaseModel
 import models
 import uuid
 
@@ -571,3 +573,26 @@ def _build_fix(dev) -> str:
     elif dev.deviation_type == "extra_rung":
         return f"Remove extra rung {dev.rung_number} from '{dev.program}'/PreState, or raise a deviation request to add it to the reference."
     return ""
+
+class ChatMessage(BaseModel):
+    role:    str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+
+@app.post("/agent/chat")
+async def agent_chat(
+    request: ChatRequest,
+    db: Session = Depends(get_db)
+):
+    """Run the PLC review agent with tool calling."""
+    messages = [
+        {"role": m.role, "content": m.content}
+        for m in request.messages
+    ]
+    try:
+        response = run_agent(messages, db)
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

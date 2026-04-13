@@ -5,6 +5,7 @@ import FindingsReport from './components/FindingsReport'
 import ProjectCompare from './components/ProjectCompare'
 import CompareReport from './components/CompareReport'
 import ProjectUpload from './components/ProjectUpload'
+import AgentPage from './components/AgentPage'
 
 export default function App() {
   const [activeTab,   setActiveTab]   = useState('review')
@@ -35,6 +36,7 @@ export default function App() {
     { id: 'results',         label: `Results ${reviewMeta ? `(${reviewMeta.totalDeviations})` : ''}` },
     { id: 'compare-results', label: `Compare Results ${compareData ? `(${compareData.total_findings})` : ''}` },
     { id: 'upload-project', label: 'Upload Project' },
+    { id: 'agent', label: 'AI Agent' },
   ]
 
   return (
@@ -67,6 +69,7 @@ export default function App() {
         {activeTab === 'compare'         && <ProjectCompare onComplete={handleCompareComplete} />}
         {activeTab === 'compare-results' && <CompareReport data={compareData} />}
         {activeTab === 'upload-project' && <ProjectUpload onUploaded={() => {}} />}
+        {activeTab === 'agent' && <AgentPage />}
       </main>
 
     </div>

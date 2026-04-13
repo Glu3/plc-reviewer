@@ -65,3 +65,8 @@ export async function uploadProject(file, versionLabel = 'v1') {
   )
   return res.data
 }
+
+export async function sendAgentMessage(messages) {
+  const res = await api.post('/agent/chat', { messages })
+  return res.data.response
+}
